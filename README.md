@@ -52,6 +52,94 @@ zabbix-setup/
 
 ---
 
+## **Step 0: Requirements Check and Setup Script**
+
+Create a Bash script to automate the initial setup on each server. This script will:
+
+1. Check if the operating system meets the requirements.
+2. Install the latest versions of Docker and Docker Compose.
+3. Add `daemon.json` configuration for the Docker registry:
+   ```json
+   {
+     "registry-mirrors": ["https://registry.vaheed.net:2053"]
+   }
+   ```
+4. Create the project folder structure and prepare necessary files.
+5. Prompt the user for input to configure server-specific details, such as:
+   - Server role (e.g., `srv` or `prx`).
+   - Server IPs.
+   - Environment variables.
+6. Generate secure passwords and user credentials as needed.
+
+### Example Script
+
+```bash
+#!/bin/bash
+
+set -e
+
+# Check and install Docker if not present
+if ! [ -x "$(command -v docker)" ]; then
+  echo "Installing Docker..."
+  curl -fsSL https://get.docker.com | bash
+fi
+
+# Check and install Docker Compose if not present
+if ! [ -x "$(command -v docker-compose)" ]; then
+  echo "Installing Docker Compose..."
+  curl -L "https://github.com/docker/compose/releases/download/$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep tag_name | cut -d '"' -f 4)/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  chmod +x /usr/local/bin/docker-compose
+fi
+
+# Configure Docker daemon.json
+mkdir -p /etc/docker
+cat <<EOF > /etc/docker/daemon.json
+{
+  "registry-mirrors": ["https://registry.vaheed.net:2053"]
+}
+EOF
+systemctl restart docker
+
+# Create project structure
+read -p "Enter project directory name: " project_dir
+mkdir -p "/$project_dir/zbx_env"
+
+# Get user inputs
+read -p "Enter server role (srv or prx): " server_role
+read -p "Enter server IP address: " server_ip
+read -p "Enter hostname (e.g., srv01.zbx.vaheed.net): " hostname
+
+# Generate environment files
+if [ "$server_role" == "srv" ]; then
+  cat <<EOT > /$project_dir/zbx_env/.env
+POSTGRES_USER=zabbix
+POSTGRES_PASSWORD=$(openssl rand -base64 12)
+POSTGRES_DB=zabbix_db
+DB_REPLICATION_USER=replicator
+DB_REPLICATION_PASSWORD=$(openssl rand -base64 12)
+
+ZBX_SERVER_NAME=$hostname
+ZBX_SERVER_PORT=10051
+
+HA_NODE_NAME=$hostname
+HA_NODE_PASS=$(openssl rand -base64 12)
+
+ZBX_WEB_PORT=8080
+EOT
+else
+  cat <<EOT > /$project_dir/zbx_env/.env
+ZBX_PROXY_NAME=$hostname
+ZBX_SERVER_HOST=srv01.zbx.vaheed.net,srv02.zbx.vaheed.net
+ZBX_PROXY_PORT=10051
+EOT
+fi
+
+# Completion message
+echo "Setup complete. Copy this folder to the appropriate server and run the script there."
+```
+
+---
+
 ## **Step 1: Prepare Environment Files**
 
 Create `.env` files for all servers and proxies to store environment variables securely.
