@@ -52,7 +52,7 @@ zabbix-setup/
 
 ---
 
-## **Step 0: Requirements Check and Setup Script**
+## **Step 0: Requirements Check and Setup Script (Optional!)**
 
 Create a Bash script to automate the initial setup on each server. This script will:
 
